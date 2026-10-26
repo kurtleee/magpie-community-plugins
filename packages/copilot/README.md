@@ -82,10 +82,36 @@ OpenCode ignores magpie's additional hook.
 GitHub's quota endpoint is internal and may change. An organization may not
 expose all balances to a seat; missing data is not an estimate of its budget.
 
+## Network and credential scope
+
+The new network operation is a read of `GET /copilot_internal/user`. It sends
+the account's GitHub OAuth token only to `https://api.github.com` or, for an
+Enterprise sign-in, `https://api.<enterpriseUrl>`. Enter only the GitHub host
+your organization trusts: HTTPS validation does not establish ownership of a
+domain. The quota request rejects redirects, and sends no prompt, model
+request, local file or inference token.
+
+The inherited device flow posts the public OAuth client id and device code
+to the selected GitHub host's `/login/device/code` and
+`/login/oauth/access_token`. Inference token renewal sends the OAuth token to
+`/copilot_internal/v2/token` on that account's API host. Model requests use
+the Copilot inference token at `https://api.githubcopilot.com` or the
+Enterprise `https://copilot-api.<enterpriseUrl>` origin. These operations are
+separate from reading quota.
+
+The plugin gets credentials from the host's `getAuth`; it does not scan
+credential files, a keychain or agent configurations. Only the existing
+inference token renewal calls `client.auth.set`. No dependency, install
+script, telemetry, relay or account migration is added.
+
 ## Tests
 
 ```sh
-HOME=$(mktemp -d) bun test packages/copilot
+(
+  verification_home=$(mktemp -d) || exit
+  trap 'rm -rf "$verification_home"' EXIT
+  HOME="$verification_home" bun test packages/copilot
+)
 bun scripts/check.mjs copilot
 ```
 
@@ -93,3 +119,7 @@ Tests use synthetic accounts and mocked network responses only: public and
 Enterprise device flows, token refresh, request signing, fractional credits,
 legacy requests, unlimited allowances, resets, unknown quota and read failures.
 They read no real auth files and consume no Copilot allowance.
+The quota read test also uses an expired inference token and asserts the exact
+single OAuth quota request, no auth persistence and unchanged input credentials.
+Live inference and Enterprise access require separate verification against a
+real account; mocked tests are not evidence of vendor acceptance.

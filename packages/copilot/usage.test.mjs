@@ -174,10 +174,36 @@ test("numeric-string reset timestamps work and nonpositive timestamps fall back"
 
 test("a quota read never persists or renews either token", async () => {
   const saved = [];
+  const requests = [];
+  const expired = { ...auth, access: "", expires: 0 };
+  const before = structuredClone(expired);
   const hooks = await CopilotAuthPlugin({ client: { auth: { set: async (x) => saved.push(x) } } });
-  globalThis.fetch = async () => response(premium({ entitlement: 300, remaining: 150 }));
-  assert.equal((await hooks.auth.usage(getAuth, { id: "github-copilot" })).windows[0].used, 50);
+  globalThis.fetch = async (url, init) => {
+    requests.push({ url, authorization: new Headers(init?.headers).get("authorization") });
+    return response(premium({ entitlement: 300, remaining: 150 }));
+  };
+  const result = await hooks.auth.usage(async () => expired, { id: "github-copilot" });
+  assert.equal(result.windows[0]?.used, 50);
+  assert.deepEqual(requests, [{
+    url: "https://api.github.com/copilot_internal/user", authorization: "token mock-oauth",
+  }]);
   assert.deepEqual(saved, []);
+  assert.deepEqual(expired, before);
+});
+
+test("an unreadable sign-in stays unknown without sending a request or exposing its error", async () => {
+  let called = false;
+  const result = await readUsage(async () => {
+    throw new Error("mock-oauth credential store could not be read");
+  }, async () => {
+    called = true;
+    return response({});
+  });
+  assert.equal(called, false);
+  assert.equal(result.signIn, "kept");
+  assert.deepEqual(result.windows, []);
+  assert.ok(result.error);
+  assert.ok(!JSON.stringify(result).includes("mock-oauth"));
 });
 
 test("only an explicit HTTP 401 expires the sign-in", async () => {

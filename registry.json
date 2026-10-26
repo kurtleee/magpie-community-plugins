@@ -1,6 +1,8 @@
 {
   "version": 1,
   "plugins": [
+    { "package": "@magpie-community/opencode-copilot-auth", "name": "GitHub Copilot", "providers": ["github-copilot"], "community": true,
+      "summary": { "en": "GitHub Copilot on GitHub.com or GitHub Enterprise, with premium request or credit usage, remaining allowance and quota reset dates.", "zh": "GitHub Copilot：支持 GitHub.com 与 GitHub Enterprise，显示高级请求或积分用量、剩余额度和重置时间。" } },
     { "package": "@magpie-community/opencode-joycode-auth", "name": "JoyCode", "providers": ["joycode"], "community": true,
       "summary": { "en": "Unofficial JoyCode provider: JD account browser sign-in, live models and credit multipliers, plan credits and streaming tool calls.", "zh": "非官方 JoyCode 插件：京东账号浏览器登录，动态模型与积分倍率、套餐额度及流式工具调用。" } },
     {"package": "@magpie-community/opencode-kimi-work-auth", "name": "Kimi Work", "icon": "kimi", "providers": ["kimi-work"], "community": true, "summary": {"en": "Kimi desktop Work subscription through its local sign-in, with live Work models and shared membership usage. Separate from Kimi Code.", "zh": "使用本机普通 Kimi 桌面版的 Work 登录，自动读取 Work 模型和会员共享用量；独立于 Kimi Code。"}},

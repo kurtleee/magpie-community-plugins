@@ -58,7 +58,7 @@ export async function CopilotAuthPlugin({ client }) {
           apiKey: "",
           async fetch(input, init) {
             const info = await getAuth();
-            if (info.type !== "oauth") return {};
+            if (info?.type !== "oauth") return fetch(input, init);
             if (!info.access || info.expires < Date.now()) {
               const domain = info.enterpriseUrl
                 ? normalizeDomain(info.enterpriseUrl)
@@ -102,9 +102,9 @@ export async function CopilotAuthPlugin({ client }) {
             let isVisionRequest = false;
             try {
               const body =
-                typeof init.body === "string"
+                typeof init?.body === "string"
                   ? JSON.parse(init.body)
-                  : init.body;
+                  : init?.body;
               if (body?.messages) {
                 if (body.messages.length > 0) {
                   const lastMessage = body.messages[body.messages.length - 1];
@@ -131,19 +131,18 @@ export async function CopilotAuthPlugin({ client }) {
                   lastInput.content.some((part) => part.type === "input_image");
               }
             } catch {}
-            const headers = {
-              ...init.headers,
-              ...HEADERS,
-              Authorization: `Bearer ${info.access}`,
-              "Openai-Intent": "conversation-edits",
-              "X-Initiator": isAgentCall ? "agent" : "user",
-            };
-            if (isVisionRequest) {
-              headers["Copilot-Vision-Request"] = "true";
+            const headers = new Headers(init?.headers);
+            headers.delete("x-api-key");
+            headers.delete("authorization");
+            for (const [key, value] of Object.entries(HEADERS)) {
+              headers.set(key, value);
             }
-
-            delete headers["x-api-key"];
-            delete headers["authorization"];
+            headers.set("Authorization", `Bearer ${info.access}`);
+            headers.set("Openai-Intent", "conversation-edits");
+            headers.set("X-Initiator", isAgentCall ? "agent" : "user");
+            if (isVisionRequest) {
+              headers.set("Copilot-Vision-Request", "true");
+            }
 
             return fetch(input, {
               ...init,
@@ -212,7 +211,7 @@ export async function CopilotAuthPlugin({ client }) {
               headers: {
                 Accept: "application/json",
                 "Content-Type": "application/json",
-                "User-Agent": "GitHubCopilotChat/0.35.0",
+                "User-Agent": HEADERS["User-Agent"],
               },
               body: JSON.stringify({
                 client_id: CLIENT_ID,
@@ -237,7 +236,7 @@ export async function CopilotAuthPlugin({ client }) {
                     headers: {
                       Accept: "application/json",
                       "Content-Type": "application/json",
-                      "User-Agent": "GitHubCopilotChat/0.35.0",
+                      "User-Agent": HEADERS["User-Agent"],
                     },
                     body: JSON.stringify({
                       client_id: CLIENT_ID,

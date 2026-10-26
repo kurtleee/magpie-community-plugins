@@ -1,7 +1,7 @@
 export const HEADERS = {
-  "User-Agent": "GitHubCopilotChat/0.35.0",
-  "Editor-Version": "vscode/1.107.0",
-  "Editor-Plugin-Version": "copilot-chat/0.35.0",
+  "User-Agent": "GitHubCopilotChat/0.68.0",
+  "Editor-Version": "vscode/1.140.0",
+  "Editor-Plugin-Version": "copilot-chat/0.68.0",
   "Copilot-Integration-Id": "vscode-chat",
 };
 

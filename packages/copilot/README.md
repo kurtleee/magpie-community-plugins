@@ -8,9 +8,10 @@ when it resets. It does not change the subscription or enable paid overage.
 The authentication and request implementation is adapted from
 [`opencode-copilot-auth` 0.0.12](https://www.npmjs.com/package/opencode-copilot-auth)
 ([source](https://github.com/anomalyco/opencode-copilot-auth)), under its MIT
-license, retained in `LICENSE`. It uses the same device flow, Copilot client
-headers, request signing, initiator detection and vision headers. No runtime
-dependency on another installed plugin or local file is needed.
+license, retained in `LICENSE`. It keeps the device flow, request signing,
+initiator detection and vision headers, with client versions matching magpie's
+native Copilot implementation. No runtime dependency on another installed plugin
+or local file is needed.
 
 ## Install and sign in
 
@@ -104,6 +105,11 @@ credential files, a keychain or agent configurations. Only the existing
 inference token renewal calls `client.auth.set`. No dependency, install
 script, telemetry, relay or account migration is added.
 
+Request signing preserves host headers (including `Content-Type`, `Accept` and
+`chat.headers`) supplied as a `Headers` object, plain object or tuples. It replaces
+authorization and removes `x-api-key` case-insensitively. If the host stops
+returning OAuth credentials, requests pass through without Copilot signing.
+
 ## Tests
 
 ```sh
@@ -115,11 +121,12 @@ script, telemetry, relay or account migration is added.
 bun scripts/check.mjs copilot
 ```
 
-Tests use synthetic accounts and mocked network responses only: public and
-Enterprise device flows, token refresh, request signing, fractional credits,
-legacy requests, unlimited allowances, resets, unknown quota and read failures.
+Tests use synthetic accounts, mocked vendor responses and a loopback HTTP server:
+public and Enterprise device flows, token refresh, outgoing request headers and
+body, non-OAuth passthrough, fractional credits, legacy requests, unlimited
+allowances, resets, unknown quota and read failures.
 They read no real auth files and consume no Copilot allowance.
 The quota read test also uses an expired inference token and asserts the exact
 single OAuth quota request, no auth persistence and unchanged input credentials.
 Live inference and Enterprise access require separate verification against a
-real account; mocked tests are not evidence of vendor acceptance.
+real account; these offline tests are not evidence of vendor acceptance.

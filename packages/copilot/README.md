@@ -56,11 +56,14 @@ It reads `GET /copilot_internal/user` on `api.github.com` or the account's
 inference token. Reading quota neither renews nor persists either token.
 OpenCode ignores magpie's additional hook.
 
+- Only `chat`, `completions` and `premium_interactions` snapshots are read;
+  unknown quota types cannot block chat model routing.
 - Snapshot counters accept numbers or numeric strings. Fractional
   `quota_remaining` takes precedence over the rounded legacy `remaining`;
   `remaining` is the fallback when the canonical field is absent. Used amount
-  is entitlement minus remaining. `credits_used` is used only when neither
-  the remaining counter nor a percentage is available.
+  is entitlement minus remaining. Organization-pool `credits_used` has no
+  per-seat denominator and is never divided by entitlement. Without remaining
+  counters or a percentage, a finite seat's utilization is unknown.
 - Snapshot amounts determine the percentage when known; otherwise
   `percent_remaining` gives a percentage without inventing an absolute balance.
 - `quota_reset_at`, `quota_reset_date_utc` and `quota_reset_date` supply resets;
@@ -70,11 +73,13 @@ OpenCode ignores magpie's additional hook.
   entitlement means no included allowance. An exhausted premium pool may say
   `unlimited: true, has_quota: false`; it is shown as 100% used, not unlimited.
 - Unlimited chat and completion allowances are labelled `Unlimited`, not
-  `0 / 0`. Completion quotas do not block chat model routing. Only unmanaged
-  premium seats with vendor-permitted overage are informational (`aside`);
-  Business and Enterprise exhaustion remains blocking, as in magpie's native
-  Copilot implementation. The plugin never changes the overage permission or
-  adds the separate overage counter to included usage.
+  `0 / 0`. An unlimited premium credit pool with readable `credits_used` shows
+  that usage as informational (`aside`), without inventing a seat limit or
+  percentage. Completion quotas do not block chat model routing. For finite
+  premium allowances, only unmanaged seats with vendor-permitted overage are
+  informational (`aside`); Business and Enterprise exhaustion remains blocking,
+  as in magpie's native Copilot implementation. The plugin never changes the
+  overage permission or adds the separate overage counter to included usage.
 - Empty, malformed or unavailable quota data is unknown, not zero usage.
   Only an explicit HTTP 401 marks the sign-in expired. Network errors, rate
   limits, 403s and server errors keep the sign-in. No response body or token is
@@ -124,7 +129,7 @@ bun scripts/check.mjs copilot
 Tests use synthetic accounts, mocked vendor responses and a loopback HTTP server:
 public and Enterprise device flows, token refresh, outgoing request headers and
 body, non-OAuth passthrough, fractional credits, legacy requests, unlimited
-allowances, resets, unknown quota and read failures.
+allowances, organization-pool credits, resets, unknown quota types and read failures.
 They read no real auth files and consume no Copilot allowance.
 The quota read test also uses an expired inference token and asserts the exact
 single OAuth quota request, no auth persistence and unchanged input credentials.

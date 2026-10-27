@@ -59,6 +59,56 @@ test("unlimited allowances are explicitly labelled and non-blocking", () => {
   }
 });
 
+test("unlimited premium credits show usage without inventing a seat budget", () => {
+  for (const [creditsUsed, display] of [
+    [0, "0 credits used"],
+    [1234.5, "1,234.5 credits used"],
+    ["1234.5", "1,234.5 credits used"],
+  ]) {
+    for (const hasQuota of [true, undefined]) {
+      for (const [billing, root] of [
+        [{ token_based_billing: true }, {}],
+        [{}, { token_based_billing: true }],
+      ]) {
+        const result = parseUsage(premium({
+          unlimited: true, has_quota: hasQuota, entitlement: "-1",
+          percent_remaining: 100, credits_used: creditsUsed, ...billing,
+        }, { copilot_plan: "enterprise", ...root }));
+        assert.equal(result.windows.length, 1);
+        const [window] = result.windows;
+        assert.equal(window.display, display);
+        assert.equal(window.name, "Premium credits");
+        assert.equal(window.used, 0);
+        assert.equal(window.aside, true);
+        assert.equal(window.amount, undefined);
+        assert.equal(window.limit, undefined);
+        assert.equal(result.balance, undefined);
+        assert.equal(result.error, undefined);
+      }
+    }
+  }
+});
+
+test("unlimited allowances ignore unreadable credits and non-credit counters", () => {
+  for (const creditsUsed of [undefined, null, "many", -1, NaN, Infinity, true]) {
+    const [window] = parseUsage(premium({
+      unlimited: true, credits_used: creditsUsed,
+    }, { token_based_billing: true })).windows;
+    assert.equal(window.display, "Unlimited");
+    assert.equal(window.aside, true);
+    assert.equal(window.limit, undefined);
+  }
+  const [requests] = parseUsage(premium({
+    unlimited: true, token_based_billing: false, credits_used: 1234.5,
+  }, { token_based_billing: true })).windows;
+  assert.equal(requests.display, "Unlimited");
+  const result = parseUsage({ token_based_billing: true, quota_snapshots: {
+    chat: { unlimited: true, credits_used: 1234.5 },
+    completions: { unlimited: true, credits_used: 1234.5 },
+  } });
+  assert.ok(result.windows.every((window) => window.display === "Unlimited"));
+});
+
 test("per-window resets override root reset in seconds and milliseconds", () => {
   for (const value of [1793491200, 1793491200000, "2026-11-01T00:00:00Z"]) {
     const [window] = parseUsage(premium({ percent_remaining: 50, quota_reset_at: value })).windows;
@@ -89,6 +139,55 @@ test("unknown or malformed quota never becomes zero usage", () => {
     assert.deepEqual(result.windows, []);
     assert.ok(result.error);
   }
+});
+
+test("unknown snapshot types do not create routing windows", () => {
+  for (const quota of [
+    { entitlement: 10, quota_remaining: 0, percent_remaining: 0, unlimited: false },
+    { unlimited: true },
+  ]) {
+    const result = parseUsage({
+      copilot_plan: "individual", quota_snapshots: { code_review: quota },
+    });
+    assert.deepEqual(result.windows, []);
+    assert.ok(result.error);
+    assert.equal(result.signIn, "kept");
+  }
+});
+
+test("unknown snapshots do not change known chat and premium quotas", () => {
+  const data = { quota_snapshots: {
+    premium_interactions: { entitlement: 300, quota_remaining: 200 },
+    chat: { unlimited: true },
+    completions: { entitlement: 2000, remaining: 0 },
+  } };
+  const expected = parseUsage(data);
+  data.quota_snapshots.code_review = { entitlement: 10, quota_remaining: 0 };
+  assert.deepEqual(parseUsage(data), expected);
+});
+
+test("credits used alone cannot determine a finite seat's utilization", () => {
+  for (const creditsUsed of [0, 400, "400", 2000]) {
+    const result = parseUsage(premium({
+      unlimited: false, entitlement: "1000", credits_used: creditsUsed,
+    }, { token_based_billing: true }));
+    assert.deepEqual(result.windows, []);
+    assert.ok(result.error);
+    assert.equal(result.balance, undefined);
+    assert.equal(result.signIn, "kept");
+  }
+});
+
+test("organization credits do not supply a denominator for a percent-only seat", () => {
+  const result = parseUsage(premium({
+    entitlement: "1000", percent_remaining: 25, credits_used: 1234.5,
+  }, { token_based_billing: true }));
+  const [window] = result.windows;
+  assert.equal(window.used, 75);
+  assert.equal(window.amount, undefined);
+  assert.equal(window.limit, undefined);
+  assert.equal(window.display, undefined);
+  assert.equal(result.balance, undefined);
 });
 
 test("GitHub.com and Enterprise use their own OAuth endpoint without redirecting", async () => {
@@ -270,7 +369,8 @@ test("managed seats remain blocking even when overage_permitted is true", () => 
 test("an exhausted Enterprise pool is not unlimited", () => {
   const result = parseUsage(premium({
     unlimited: true, has_quota: false, entitlement: "0", percent_remaining: 0,
-  }, { copilot_plan: "enterprise" }));
+    credits_used: 1234.5,
+  }, { copilot_plan: "enterprise", token_based_billing: true }));
   assert.equal(result.windows[0]?.used, 100);
   assert.notEqual(result.windows[0]?.display, "Unlimited");
   assert.ok(!result.windows[0]?.aside);

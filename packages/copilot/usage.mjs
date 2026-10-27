@@ -43,14 +43,14 @@ export function parseUsage(data) {
     id === "premium_interactions" && quota.overage_permitted === true && !managed;
   const snapshots = data.quota_snapshots;
   if (snapshots && typeof snapshots === "object" && !Array.isArray(snapshots)) {
-    const ids = [...new Set([...Object.keys(names), ...Object.keys(snapshots)])];
-    for (const id of ids) {
+    // Unknown snapshots may describe unrelated allowances and must not gate chat.
+    for (const id of Object.keys(names)) {
       const quota = snapshots[id];
       if (!quota || typeof quota !== "object") continue;
       const credits = id === "premium_interactions" &&
         (quota.token_based_billing ?? data.token_based_billing) === true;
       const name = id === "premium_interactions" && credits
-        ? "Premium credits" : names[id] ?? id.replaceAll("_", " ");
+        ? "Premium credits" : names[id];
       const resetsAt = resetDate(quota.quota_reset_at) ?? rootReset;
       if (quota.unlimited === true) {
         // A managed pool is labelled unlimited even after it is spent.
@@ -59,7 +59,12 @@ export function parseUsage(data) {
           windows.push({ name, used: 100, resetsAt, span: 2592000, aside: aside(id, quota) });
           continue;
         }
-        windows.push({ name, used: 0, display: "Unlimited", aside: true });
+        const creditsUsed = credits ? count(quota.credits_used) : undefined;
+        windows.push({
+          name, used: 0, aside: true,
+          display: creditsUsed !== undefined
+            ? `${format(creditsUsed)} credits used` : "Unlimited",
+        });
         continue;
       }
       const limit = count(quota.entitlement);
@@ -70,11 +75,8 @@ export function parseUsage(data) {
       // more precise `quota_remaining`; never round away fractional credits.
       const remaining = count(quota.quota_remaining) ?? count(quota.remaining);
       const percentRemaining = numeric(quota.percent_remaining);
-      let amount = limit !== undefined && remaining !== undefined
+      const amount = limit !== undefined && remaining !== undefined
         ? Math.max(0, limit - remaining) : undefined;
-      if (amount === undefined && percentRemaining === undefined && credits) {
-        amount = count(quota.credits_used);
-      }
       let used = limit > 0 && amount !== undefined ? amount / limit * 100 : undefined;
       if (used === undefined && percentRemaining !== undefined) {
         used = Math.max(0, 100 - percentRemaining);
